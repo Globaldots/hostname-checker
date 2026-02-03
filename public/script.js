@@ -10,14 +10,16 @@ const dropZone = document.getElementById('dropZone');
 const fileInput = document.getElementById('fileInput');
 const statusMessage = document.getElementById('statusMessage');
 const downloadJsonBtn = document.getElementById('downloadJsonBtn');
-const downloadCsvBtn = document.getElementById('downloadCsvBtn');
+const downloadcsvBtn = document.getElementById('downloadCsvBtn');
 const refreshBtn = document.getElementById('refreshBtn');
+const clearBtn = document.getElementById('clearBtn');
 
 let currentData = [];
 
 // Event Listeners
 checkBtn.addEventListener('click', handleSingleCheck);
 refreshBtn.addEventListener('click', loadResults);
+clearBtn.addEventListener('click', clearResults);
 downloadJsonBtn.addEventListener('click', downloadJson);
 downloadCsvBtn.addEventListener('click', downloadCsv);
 
@@ -132,6 +134,27 @@ async function loadResults() {
     }
 }
 
+async function clearResults() {
+    if (!confirm('Are you sure you want to delete all records? This cannot be undone.')) return;
+
+    setLoading(true);
+    setStatus('Clearing records...');
+
+    try {
+        const res = await fetch(`${API_URL}/results`, { method: 'DELETE' });
+        if (res.ok) {
+            setStatus('All records cleared.');
+            loadResults();
+        } else {
+            throw new Error('Failed to clear records');
+        }
+    } catch (err) {
+        setStatus(`Error: ${err.message}`);
+    } finally {
+        setLoading(false);
+    }
+}
+
 function renderTable(data) {
     resultsTableBody.innerHTML = '';
 
@@ -145,34 +168,32 @@ function renderTable(data) {
         tr.innerHTML = `
             <td>${row.hostname}</td>
             <td>${truncate(row.authoritative_ns || '')}</td>
-            <td>${renderBadge(row.is_proxied, 'yes', 'no')}</td>
+            <td>${renderBadge(row.is_proxied, 'yes')}</td>
             <td>${row.dns_type || '-'}</td>
             <td>${truncate(row.dns_result || '')}</td>
-            <td>${renderBadge(row.ssl_google, 'allowed', 'not_allowed')}</td>
-            <td>${renderBadge(row.ssl_ssl_com, 'allowed', 'not_allowed')}</td>
-            <td>${renderBadge(row.ssl_lets_encrypt, 'allowed', 'not_allowed')}</td>
-            <td>${renderBadge(row.zone_hold, 'yes', 'no')}</td>
+            <td>${renderBadge(row.ssl_google, 'allowed')}</td>
+            <td>${renderBadge(row.ssl_ssl_com, 'allowed')}</td>
+            <td>${renderBadge(row.ssl_lets_encrypt, 'allowed')}</td>
+            <td>${renderZoneHoldBadge(row.zone_hold)}</td>
         `;
         resultsTableBody.appendChild(tr);
     });
 }
 
-function renderBadge(value, goodVal, badVal) {
+function renderBadge(value, goodVal) {
     if (!value) return '-';
-    // Logic: 'allowed' is good, 'not_allowed' is bad (or neutral?). 
-    // Usually 'not_allowed' is warning color.
-    // 'yes' for proxied is good (green). 'no' is gray?
-    // 'yes' for zone_hold is BAD (means blocked).
-
-    let className = 'badge';
-    // Zone Hold specific logic
-    if (value === 'yes' && arguments[1] === 'yes') {
-        // Note: arguments check is hacky here. Let's rely on string.
-    }
-
-    className += ' ' + value;
-
+    let className = 'badge ' + value;
     return `<span class="${className}">${value.replace('_', ' ')}</span>`;
+}
+
+function renderZoneHoldBadge(value) {
+    if (!value) return '-';
+    // Logic: yes = red (bad), no = green (good)
+    // We'll rely on CSS classes, adding overrides
+    let className = 'badge';
+    if (value === 'yes') className += ' not_allowed'; // Reuse not_allowed (Red)
+    if (value === 'no') className += ' allowed';      // Reuse allowed (Green)
+    return `<span class="${className}">${value}</span>`;
 }
 
 function truncate(str, len = 30) {

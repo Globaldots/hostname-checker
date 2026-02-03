@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,9 +10,10 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
+
 <body>
     <div class="background-glow"></div>
-    
+
     <div class="container">
         <header>
             <h1>Hostname <span class="gradient-text">Checker</span></h1>
@@ -27,7 +29,8 @@
 
                 <div class="tab-content active" id="single-tab">
                     <div class="input-group">
-                        <input type="text" id="hostInput" placeholder="Enter hostname (e.g. example.com)" autocomplete="off">
+                        <input type="text" id="hostInput" placeholder="Enter hostname (e.g. example.com)"
+                            autocomplete="off">
                         <button id="checkBtn" class="primary-btn">
                             <span class="btn-text">Check Host</span>
                             <div class="loader hidden"></div>
@@ -49,11 +52,12 @@
                     <h2>Results</h2>
                     <div class="actions">
                         <button id="refreshBtn" class="icon-btn" title="Refresh Data">↻</button>
+                        <button id="clearBtn" class="secondary-btn danger-btn">Clear All</button>
                         <button id="downloadJsonBtn" class="secondary-btn">Download JSON</button>
                         <button id="downloadCsvBtn" class="secondary-btn">Download CSV</button>
                     </div>
                 </div>
-                
+
                 <div class="table-container">
                     <table id="resultsTable">
                         <thead>
@@ -81,4 +85,5 @@
 
     <script src="script.js"></script>
 </body>
+
 </html>
