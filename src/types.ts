@@ -1,7 +1,5 @@
 export interface Bindings {
     hosts_db: D1Database;
-    CLOUDFLARE_API_TOKEN: string;
-    CLOUDFLARE_ZONE_ID: string;
 }
 
 export interface ErrorResponse {
@@ -44,7 +42,4 @@ export enum RecordType {
     TXT = 'TXT'
 }
 
-export interface ZoneHoldResult {
-    zone_hold: 'yes' | 'no';
-    details?: string;
-}
+

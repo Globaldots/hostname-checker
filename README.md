@@ -1,16 +1,24 @@
 # Hostname Checker
 
-## Overview
-The Hostname Checker is a full-stack Cloudflare Worker application designed to analyze domain properties. It performs DNS lookups (A, CNAME, NS, CAA), checks for Cloudflare proxy status, verifying SSL issuance eligibility (Google, SSL.com, Let's Encrypt)
+The Hostname Checker is a full-stack Cloudflare Worker application designed to analyze domain properties. It performs DNS lookups (A, CNAME, NS, CAA), checks for Cloudflare proxy status, and verifies SSL issuance eligibility for major providers.
+
+## Features
+- **DNS Analysis**: Resolves A, CNAME, and NS records.
+- **Proxy Detection**: Checks if a hostname resolves to Cloudflare's IP range.
+- **CAA Verification**: Checks CAA records for permission to issue certificates from Google (pki.goog), SSL.com, and Let's Encrypt.
+- **Bulk Processing**: Upload a list of hostnames to check them in sequence.
+- **Data Export**: Download results in JSON or CSV format.
+- **Database Persistence**: Stores all check results in Cloudflare D1.
+- **Clear Results**: Easily wipe the check history from the UI.
 
 ## Architecture
 The application is built on **Cloudflare Workers** using the **Hono** framework.
 - **Frontend**: Static HTML/CSS/JS served from the worker's assets.
-- **Backend**: Worker API handling DNS (via DoH), Cloudflare API checks, and logic.
+- **Backend**: Worker API handling DNS (via DoH), Cloudflare IP validation, and data persistence.
 - **Database**: **Cloudflare D1** (`hosts_db`) stores checking history and results.
 - **Services**:
-    - `DNS Service`: resolves records using 1.1.1.1 DoH.
-    - `Cloudflare Service`: validates Cloudflare IPs and uses the Cloudflare API for Zone Hold checks.
+    - `DNS Service`: Resolves records using 1.1.1.1 DoH (DNS over HTTPS).
+    - `Cloudflare Service`: Validates if resolved IPs belong to Cloudflare's edge network.
 
 ## Local Development
 ```bash
@@ -32,7 +40,7 @@ https://hostname-check.super-cdn.com
 Performs a check on a single hostname.
 
 **Parameters**:
-- `hostname` (string): The domain check.
+- `hostname` (string): The domain to check.
 
 **Response**:
 ```json
@@ -45,7 +53,6 @@ Performs a check on a single hostname.
   "ssl_google": "allowed",
   "ssl_ssl_com": "allowed",
   "ssl_lets_encrypt": "allowed",
-  "zone_hold": "no",
   "updated_at": 1770123456789
 }
 ```
@@ -56,17 +63,11 @@ Returns the history of checked hosts.
 **Response**:
 Array of host objects (same structure as above).
 
-## Configuration
-Required variables in `wrangler.jsonc`:
-- `CLOUDFLARE_API_TOKEN`: API Token with `Zone:Custom Hostnames:Edit` permissions.
-- `CLOUDFLARE_ZONE_ID`: Zone ID to use for testing custom hostnames (Zone Hold check).
+### `DELETE /api/results`
+Clears all host records from the database.
 
+## Configuration
 D1 Database Binding:
 - `hosts_db`
 
-## Examples
-```bash
-curl -X POST "http://localhost:8787/api/check-host" \
-     -H "Content-Type: application/json" \
-     -d '{"hostname": "example.com"}'
-```
+The worker name and compatibility date are configured in `wrangler.jsonc`.

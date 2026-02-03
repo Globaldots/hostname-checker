@@ -38,10 +38,7 @@
 	 * Note: Use secrets to store sensitive data.
 	 * https://developers.cloudflare.com/workers/configuration/secrets/
 	 */
-	"vars": {
-		"CLOUDFLARE_API_TOKEN": "q4kuO-4O4eAe3KEk4FP33BxkisPy8GmZNr17QM2Z",
-		"CLOUDFLARE_ZONE_ID": "37c9ca9f3da3f05991911eae2ca21f09"
-	}
+	"vars": {}
 	/**
 	 * Service Bindings (communicate between multiple Workers)
 	 * https://developers.cloudflare.com/workers/wrangler/configuration/#service-bindings
