@@ -5,6 +5,8 @@ import { handleCheckHost } from './handlers/hostHandler';
 
 const app = new Hono<{ Bindings: Bindings }>();
 
+// Version: 2026-02-03-15:06 - Verified push to Steven-GlobalDots
+
 app.use('/api/*', cors());
 
 app.post('/api/check-host', handleCheckHost);
