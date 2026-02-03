@@ -57,6 +57,21 @@ Performs a check on a single hostname.
 }
 ```
 
+### `POST /api/check-hosts-bulk`
+Performs checks on multiple hostnames in one request (Max 10).
+
+**Parameters**:
+- `hostnames` (string[]): Array of domains to check.
+
+**Response**:
+Array of results (same structure as above, with added `success` field):
+```json
+[
+  { "success": true, "hostname": "google.com", ... },
+  { "success": false, "hostname": "broken.com", "error": "DNS Error", ... }
+]
+```
+
 ### `GET /api/results`
 Returns the history of checked hosts.
 

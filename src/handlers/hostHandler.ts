@@ -121,93 +121,147 @@ function parseCAA(answer: any) {
 }
 
 
-export async function handleCheckHost(c: Context<{ Bindings: Bindings }>) {
-    const body = await c.req.json();
-    const hostname = body.hostname?.trim();
 
-    if (!hostname) {
-        return c.json({ error: 'Hostname check failed' }, 400);
+/**
+ * Core logic for checking a single hostname
+ */
+async function processHostnameCheck(hostname: string, db: D1Database) {
+    console.log(`[Process] Starting check for: ${hostname}`);
+
+    // 1. DNS Lookup (A Record)
+    const aRecord = await dnsQuery(hostname, RecordType.A);
+    const dnsType = 'A';
+    let dnsResult = '';
+    let isProxied = 'no';
+
+    if (aRecord.Answer && aRecord.Answer.length > 0) {
+        const ips = aRecord.Answer.filter(a => a.type === 1).map(a => a.data);
+        dnsResult = ips.join(', ');
+        if (ips.some(ip => isCloudflareIp(ip))) {
+            isProxied = 'yes';
+        }
     }
 
+    // 2. Authoritative NS
+    const authNs = await getAuthoritativeNameservers(hostname);
+
+    // 3. CAA Check
+    let caaRes = await dnsQuery(hostname, RecordType.CAA);
+    let caaAnswers = caaRes.Answer || [];
+    if (caaAnswers.length === 0) {
+        const parent = hostname.split('.').slice(1).join('.');
+        if (parent) {
+            caaRes = await dnsQuery(parent, RecordType.CAA);
+            caaAnswers = caaRes.Answer || [];
+        }
+    }
+
+    const parsedCaas = caaAnswers.map(parseCAA).filter(x => x !== null);
+    const sslGoogle = checkCaaPermission(parsedCaas, 'pki.goog');
+    const sslSslCom = checkCaaPermission(parsedCaas, 'ssl.com');
+    const sslLetsEncrypt = checkCaaPermission(parsedCaas, 'letsencrypt.org');
+
+    const result = {
+        hostname,
+        authoritative_ns: authNs,
+        is_proxied: isProxied,
+        dns_type: dnsType,
+        dns_result: dnsResult,
+        ssl_google: sslGoogle,
+        ssl_ssl_com: sslSslCom,
+        ssl_lets_encrypt: sslLetsEncrypt,
+        updated_at: Date.now()
+    };
+
+    // 5. Store in D1
+    await db.prepare(`
+        INSERT INTO hosts (hostname, authoritative_ns, is_proxied, dns_type, dns_result, ssl_google, ssl_ssl_com, ssl_lets_encrypt, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(hostname) DO UPDATE SET
+            authoritative_ns=excluded.authoritative_ns,
+            is_proxied=excluded.is_proxied,
+            dns_type=excluded.dns_type,
+            dns_result=excluded.dns_result,
+            ssl_google=excluded.ssl_google,
+            ssl_ssl_com=excluded.ssl_ssl_com,
+            ssl_lets_encrypt=excluded.ssl_lets_encrypt,
+            updated_at=excluded.updated_at
+    `).bind(
+        hostname,
+        authNs.join(', '),
+        isProxied,
+        dnsType,
+        dnsResult,
+        sslGoogle,
+        sslSslCom,
+        sslLetsEncrypt,
+        result.updated_at
+    ).run();
+
+    return result;
+}
+
+export async function handleCheckHost(c: Context<{ Bindings: Bindings }>) {
     try {
-        // 1. DNS Lookup (A Record)
-        const aRecord = await dnsQuery(hostname, RecordType.A);
-        const dnsType = 'A';
-        let dnsResult = '';
-        let isProxied = 'no';
+        const body = await c.req.json();
+        const hostname = body.hostname?.trim();
 
-        if (aRecord.Answer && aRecord.Answer.length > 0) {
-            const ips = aRecord.Answer.filter(a => a.type === 1).map(a => a.data);
-            dnsResult = ips.join(', ');
-            if (ips.some(ip => isCloudflareIp(ip))) {
-                isProxied = 'yes';
-            }
+        if (!hostname) {
+            return c.json({ error: 'Hostname is required' }, 400);
         }
 
-        // 2. Authoritative NS
-        const authNs = await getAuthoritativeNameservers(hostname);
-
-        // 3. CAA Check
-        let caaRes = await dnsQuery(hostname, RecordType.CAA);
-        let caaAnswers = caaRes.Answer || [];
-        if (caaAnswers.length === 0) {
-            const parent = hostname.split('.').slice(1).join('.');
-            if (parent) {
-                caaRes = await dnsQuery(parent, RecordType.CAA);
-                caaAnswers = caaRes.Answer || [];
-            }
-        }
-
-        const parsedCaas = caaAnswers.map(parseCAA).filter(x => x !== null);
-        const sslGoogle = checkCaaPermission(parsedCaas, 'pki.goog');
-        const sslSslCom = checkCaaPermission(parsedCaas, 'ssl.com');
-        const sslLetsEncrypt = checkCaaPermission(parsedCaas, 'letsencrypt.org');
-
-
-
-        // 5. Store in D1
-        await c.env.hosts_db.prepare(`
-            INSERT INTO hosts (hostname, authoritative_ns, is_proxied, dns_type, dns_result, ssl_google, ssl_ssl_com, ssl_lets_encrypt, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(hostname) DO UPDATE SET
-                authoritative_ns=excluded.authoritative_ns,
-                is_proxied=excluded.is_proxied,
-                dns_type=excluded.dns_type,
-                dns_result=excluded.dns_result,
-                ssl_google=excluded.ssl_google,
-                ssl_ssl_com=excluded.ssl_ssl_com,
-                ssl_lets_encrypt=excluded.ssl_lets_encrypt,
-                updated_at=excluded.updated_at
-        `).bind(
-            hostname,
-            authNs.join(', '),
-            isProxied,
-            dnsType,
-            dnsResult,
-            sslGoogle,
-            sslSslCom,
-            sslLetsEncrypt,
-            Date.now()
-        ).run();
-
-        return c.json({
-            hostname,
-            authoritative_ns: authNs,
-            is_proxied: isProxied,
-            dns_type: dnsType,
-            dns_result: dnsResult,
-            ssl_google: sslGoogle,
-            ssl_ssl_com: sslSslCom,
-            ssl_lets_encrypt: sslLetsEncrypt,
-            updated_at: Date.now()
-        });
+        const result = await processHostnameCheck(hostname, c.env.hosts_db);
+        return c.json(result);
 
     } catch (e: any) {
+        console.error('[Error] Single host check failed:', e);
         return c.json({
             success: false,
             error: e.message || 'Unknown error occurred',
-            code: 'INTERNAL_ERROR',
-            details: e.stack
+            code: 'INTERNAL_ERROR'
+        }, 500);
+    }
+}
+
+export async function handleCheckHostsBulk(c: Context<{ Bindings: Bindings }>) {
+    try {
+        const body = await c.req.json();
+        const hostnames = body.hostnames;
+
+        if (!hostnames || !Array.isArray(hostnames)) {
+            return c.json({ error: 'hostnames array is required' }, 400);
+        }
+
+        if (hostnames.length > 10) {
+            return c.json({ error: 'Maximum 10 hostnames allowed per bulk request' }, 400);
+        }
+
+        const results = [];
+        for (const host of hostnames) {
+            const hostname = host?.trim();
+            if (!hostname) continue;
+
+            try {
+                const res = await processHostnameCheck(hostname, c.env.hosts_db);
+                results.push({ success: true, ...res });
+            } catch (error: any) {
+                console.error(`[Error] Bulk check failed for ${hostname}:`, error);
+                results.push({
+                    hostname,
+                    success: false,
+                    error: error.message || 'Check failed'
+                });
+            }
+        }
+
+        return c.json(results);
+
+    } catch (e: any) {
+        console.error('[Error] Bulk host check failed:', e);
+        return c.json({
+            success: false,
+            error: e.message || 'Unknown error occurred',
+            code: 'INTERNAL_ERROR'
         }, 500);
     }
 }

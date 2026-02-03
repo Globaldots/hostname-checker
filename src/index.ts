@@ -1,15 +1,16 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { Bindings } from './types';
-import { handleCheckHost } from './handlers/hostHandler';
+import { handleCheckHost, handleCheckHostsBulk } from './handlers/hostHandler';
 
 const app = new Hono<{ Bindings: Bindings }>();
 
-// Version: 2026-02-03-15:06 - Verified push to Steven-GlobalDots
+// Version: 2026-02-03-16:20 - Added Bulk API Support
 
 app.use('/api/*', cors());
 
 app.post('/api/check-host', handleCheckHost);
+app.post('/api/check-hosts-bulk', handleCheckHostsBulk);
 
 app.delete('/api/results', async (c) => {
   try {
