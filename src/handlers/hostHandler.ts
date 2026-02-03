@@ -137,6 +137,11 @@ export async function handleCheckHost(c: Context<{ Bindings: Bindings }>) {
         });
 
     } catch (e: any) {
-        return c.json({ error: e.message }, 500);
+        return c.json({
+            success: false,
+            error: e.message || 'Unknown error occurred',
+            code: 'INTERNAL_ERROR',
+            details: e.stack
+        }, 500);
     }
 }
