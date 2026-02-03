@@ -44,52 +44,80 @@ const HEX_PAIR_REGEX = /^[0-9A-Fa-f]{2}$/;
 function parseCAA(answer: any) {
     if (answer.type !== 257) return null;
 
-    let flags, tag, value;
+    try {
+        let flags, tag, value;
 
-    // Check for RFC 3597 hex format (common in Cloudflare DoH for some domains)
-    // Format: \# <length> <hex_data>
-    // e.g. \# 17 00 05 69 73 73 75 65 61 6d 61 7a 6f 6e 2e 63 6f 6d
-    if (answer.data.startsWith('\\#')) {
-        const parts = answer.data.split(' ');
-        if (parts.length < 3) return null;
+        // Check for RFC 3597 hex format (common in Cloudflare DoH for some domains)
+        // Format: \# <length> <hex_data>
+        // e.g. \# 17 00 05 69 73 73 75 65 61 6d 61 7a 6f 6e 2e 63 6f 6d
+        if (answer.data.startsWith('\\#')) {
+            // Robust split handling multiple spaces
+            const parts = answer.data.split(/\s+/).filter((p: string) => p.length > 0);
 
-        // parts[0] = \#
-        // parts[1] = length
-        // parts[2...] = hex bytes
-        const hexBytes = parts.slice(2).join('');
+            if (parts.length < 3) {
+                console.warn('[CAA] Hex format too short:', answer.data);
+                return null;
+            }
 
-        // Convert hex string to u8 array
-        const buffer = new Uint8Array(hexBytes.match(/.{1,2}/g).map((byte: string) => parseInt(byte, 16)));
+            // parts[0] = \#
+            // parts[1] is length (byte count of rdata?, actually just skipped in logic usually)
+            // rest is hex bytes of the rdata
 
-        // CAA Record Struct: [Flags (1 byte)] [Tag Length (1 byte)] [Tag (n bytes)] [Value (m bytes)]
-        if (buffer.length < 2) return null;
+            const hexBytes = parts.slice(2).join('');
 
-        flags = buffer[0];
-        const tagLen = buffer[1];
+            const hexMatch = hexBytes.match(/.{1,2}/g);
+            if (!hexMatch) {
+                console.warn('[CAA] Invalid hex string:', hexBytes);
+                return null;
+            }
 
-        if (buffer.length < 2 + tagLen) return null;
+            // Convert hex string to u8 array
+            const buffer = new Uint8Array(hexMatch.map((byte: string) => parseInt(byte, 16)));
 
-        const tagBytes = buffer.slice(2, 2 + tagLen);
-        const valueBytes = buffer.slice(2 + tagLen);
+            if (buffer.length < 2) {
+                console.warn('[CAA] Buffer too short:', buffer.length);
+                return null;
+            }
 
-        const decoder = new TextDecoder();
-        tag = decoder.decode(tagBytes);
-        value = decoder.decode(valueBytes);
+            flags = buffer[0];
+            const tagLen = buffer[1];
 
-    } else {
-        // Standard text format: 0 issue "amazon.com"
-        const match = answer.data.match(/^(\d+)\s+(\w+)\s+(?:"(.*)"|(.*))$/);
-        if (!match) return null;
-        flags = parseInt(match[1], 10);
-        tag = match[2];
-        value = match[3] || match[4];
+            if (buffer.length < 2 + tagLen) {
+                console.warn('[CAA] Tag length mismatch:', tagLen, buffer.length);
+                return null;
+            }
+
+            const tagBytes = buffer.slice(2, 2 + tagLen);
+            const valueBytes = buffer.slice(2 + tagLen);
+
+            const decoder = new TextDecoder();
+            tag = decoder.decode(tagBytes);
+            value = decoder.decode(valueBytes);
+
+            console.log(`[CAA] Parsed Hex: tag=${tag} value=${value}`);
+
+        } else {
+            // Standard text format: 0 issue "amazon.com"
+            const match = answer.data.match(/^(\d+)\s+(\w+)\s+(?:"(.*)"|(.*))$/);
+            if (!match) {
+                console.warn('[CAA] Failed to match text format:', answer.data);
+                return null;
+            }
+            flags = parseInt(match[1], 10);
+            tag = match[2];
+            value = match[3] || match[4];
+            console.log(`[CAA] Parsed Text: tag=${tag} value=${value}`);
+        }
+
+        return {
+            critical: !!(flags & 128),
+            tag,
+            value
+        };
+    } catch (e) {
+        console.error('[CAA] Parse Logic Error:', e);
+        return null;
     }
-
-    return {
-        critical: !!(flags & 128),
-        tag,
-        value
-    };
 }
 
 
